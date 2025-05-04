@@ -1,3 +1,4 @@
+# venv\Scripts\activate to start venv
 import os
 import discord
 from discord.ext import commands
