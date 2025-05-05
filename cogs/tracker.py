@@ -7,6 +7,26 @@ from db.database import users
 
 active_sessions = {}
 
+# Level thresholds in total seconds
+LEVEL_THRESHOLDS = [
+    300,        # Level 1: 5 min
+    900,        # Level 2: 15 min
+    1800,       # Level 3: 30 min
+    3600,       # Level 4: 1 hr
+    7200,       # Level 5: 2 hr
+    18000,      # Level 6: 5 hr
+    36000,      # Level 7: 10 hr
+    72000,      # Level 8: 20 hr
+    180000,     # Level 9: 50 hr
+    360000      # Level 10: 100 hr
+]
+
+def calculate_level(total_seconds):
+    for i in reversed(range(len(LEVEL_THRESHOLDS))):
+        if total_seconds >= LEVEL_THRESHOLDS[i]:
+            return i + 1
+    return 0
+
 class Tracker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -35,51 +55,8 @@ class Tracker(commands.Cog):
         elif before.channel and not after.channel:
             if user_id in active_sessions:
                 session = active_sessions[user_id]
-                start_time = session["start_time"]
-                game = session["game"]
-                duration = int((datetime.datetime.utcnow() - start_time).total_seconds())
-                hours = duration // 3600
-                minutes = (duration % 3600) // 60
-                seconds = duration % 60
-
-                # Format log message
-                time_parts = []
-                if hours:
-                    time_parts.append(f"{hours} hr{'s' if hours != 1 else ''}")
-                if minutes:
-                    time_parts.append(f"{minutes} min{'s' if minutes != 1 else ''}")
-                if seconds or not time_parts:
-                    time_parts.append(f"{seconds} sec{'s' if seconds != 1 else ''}")
-                duration_str = ' '.join(time_parts)
-
-                msg = f"🎮 **{member.display_name}** played **{game}** in voice for **{duration_str}**"
-
-                # ✅ Store/update in MongoDB
-                await users.update_one(
-                    {"user_id": str(member.id), "guild_id": str(member.guild.id)},
-                    {
-                        "$inc": {
-                            f"game_time.{game}": duration,
-                            "total_time": duration
-                        },
-                        "$set": {
-                            "username": str(member.display_name)
-                        }
-                    },
-                    upsert=True
-                )
-
-                # Log to terminal and Discord
-                try:
-                    print(f"[-] {msg}")
-                except Exception as e:
-                    print(f"[-] Session finished but could not print: {e}")
-
-                guild = self.bot.get_guild(session["guild_id"])
-                log_channel = await self.get_log_channel(guild)
-                if log_channel:
-                    await log_channel.send(msg)
-
+                duration = int((datetime.datetime.utcnow() - session["start_time"]).total_seconds())
+                await self.stop_session(member, duration, session["game"], "🔕 Left voice channel")
                 del active_sessions[user_id]
     
     @commands.Cog.listener()
@@ -88,56 +65,16 @@ class Tracker(commands.Cog):
 
         user_id = after.id
 
-        # 🔍 Log raw activities
         if not after.activities or all(not act.name for act in after.activities):
             print("   🔸 No activities found.")
 
-            # Stop current game if being tracked
             if user_id in active_sessions and active_sessions[user_id]["game"]:
                 session = active_sessions[user_id]
-                start_time = session["start_time"]
-                old_game = session["game"]
-                duration = int((datetime.datetime.utcnow() - start_time).total_seconds())
-
-                # Format log message
-                time_parts = []
-                hours = duration // 3600
-                minutes = (duration % 3600) // 60
-                seconds = duration % 60
-                if hours:
-                    time_parts.append(f"{hours} hr{'s' if hours != 1 else ''}")
-                if minutes:
-                    time_parts.append(f"{minutes} min{'s' if minutes != 1 else ''}")
-                if seconds or not time_parts:
-                    time_parts.append(f"{seconds} sec{'s' if seconds != 1 else ''}")
-                duration_str = ' '.join(time_parts)
-
-                msg = f"🛑 **{after.display_name}** stopped playing **{old_game}** (Duration: {duration_str})"
-
-                # Log to Discord
-                log_channel = await self.get_log_channel(after.guild)
-                if log_channel:
-                    await log_channel.send(msg)
-                print(msg)
-
-                # Store to DB
-                await users.update_one(
-                    {"user_id": str(after.id), "guild_id": str(after.guild.id)},
-                    {
-                        "$inc": {
-                            f"game_time.{old_game}": duration,
-                            "total_time": duration
-                        },
-                        "$set": {
-                            "username": str(after.display_name)
-                        }
-                    },
-                    upsert=True
-                )
-
+                duration = int((datetime.datetime.utcnow() - session["start_time"]).total_seconds())
+                await self.stop_session(after, duration, session["game"], "🛑 No activity")
                 del active_sessions[user_id]
-
             return
+
         for act in after.activities:
             print(f"   🔸 Activity: {act.name} ({type(act).__name__})")
 
@@ -156,50 +93,11 @@ class Tracker(commands.Cog):
             print("   ⏭️ User not in a voice channel. Ignoring.")
             return
 
-        # If no game active, treat as stopping
         if not game:
             if user_id in active_sessions and active_sessions[user_id]["game"]:
                 session = active_sessions[user_id]
-                start_time = session["start_time"]
-                old_game = session["game"]
-                duration = int((datetime.datetime.utcnow() - start_time).total_seconds())
-
-                # Format log message
-                time_parts = []
-                hours = duration // 3600
-                minutes = (duration % 3600) // 60
-                seconds = duration % 60
-                if hours:
-                    time_parts.append(f"{hours} hr{'s' if hours != 1 else ''}")
-                if minutes:
-                    time_parts.append(f"{minutes} min{'s' if minutes != 1 else ''}")
-                if seconds or not time_parts:
-                    time_parts.append(f"{seconds} sec{'s' if seconds != 1 else ''}")
-                duration_str = ' '.join(time_parts)
-
-                msg = f"🛑 **{after.display_name}** stopped playing **{old_game}** (Duration: {duration_str})"
-
-                # Log
-                log_channel = await self.get_log_channel(after.guild)
-                if log_channel:
-                    await log_channel.send(msg)
-                print(msg)
-
-                # DB store
-                await users.update_one(
-                    {"user_id": str(after.id), "guild_id": str(after.guild.id)},
-                    {
-                        "$inc": {
-                            f"game_time.{old_game}": duration,
-                            "total_time": duration
-                        },
-                        "$set": {
-                            "username": str(after.display_name)
-                        }
-                    },
-                    upsert=True
-                )
-
+                duration = int((datetime.datetime.utcnow() - session["start_time"]).total_seconds())
+                await self.stop_session(after, duration, session["game"], "🛑 No game detected")
                 del active_sessions[user_id]
             return
 
@@ -207,45 +105,11 @@ class Tracker(commands.Cog):
         if user_id in active_sessions and active_sessions[user_id]["game"] == game:
             return  # same game, no change
 
-        # Stop old session if any
         if user_id in active_sessions and active_sessions[user_id]["game"]:
-            old_session = active_sessions[user_id]
-            old_game = old_session["game"]
-            start_time = old_session["start_time"]
-            duration = int((datetime.datetime.utcnow() - start_time).total_seconds())
-
-            # Format message
-            time_parts = []
-            hours = duration // 3600
-            minutes = (duration % 3600) // 60
-            seconds = duration % 60
-            if hours:
-                time_parts.append(f"{hours} hr{'s' if hours != 1 else ''}")
-            if minutes:
-                time_parts.append(f"{minutes} min{'s' if minutes != 1 else ''}")
-            if seconds or not time_parts:
-                time_parts.append(f"{seconds} sec{'s' if seconds != 1 else ''}")
-            duration_str = ' '.join(time_parts)
-
-            stop_msg = f"🛑 **{after.display_name}** stopped playing **{old_game}** (Duration: {duration_str})"
-            log_channel = await self.get_log_channel(after.guild)
-            if log_channel:
-                await log_channel.send(stop_msg)
-            print(stop_msg)
-
-            await users.update_one(
-                {"user_id": str(after.id), "guild_id": str(after.guild.id)},
-                {
-                    "$inc": {
-                        f"game_time.{old_game}": duration,
-                        "total_time": duration
-                    },
-                    "$set": {
-                        "username": str(after.display_name)
-                    }
-                },
-                upsert=True
-            )
+            session = active_sessions[user_id]
+            duration = int((datetime.datetime.utcnow() - session["start_time"]).total_seconds())
+            await self.stop_session(after, duration, session["game"], "🔁 Switched game")
+            del active_sessions[user_id]
 
         # Start tracking new game
         active_sessions[user_id] = {
@@ -260,6 +124,87 @@ class Tracker(commands.Cog):
         if log_channel:
             await log_channel.send(new_msg)
         print(new_msg)
+    
+    async def stop_session(self, member: discord.Member, duration: int, game: str, reason: str):
+        user_id = str(member.id)
+        guild_id = str(member.guild.id)
+
+        # Load existing user data
+        user_doc = await users.find_one({"user_id": user_id, "guild_id": guild_id}) or {}
+        prev_total = user_doc.get("total_time", 0)
+        prev_game = user_doc.get("game_time", {}).get(game, 0)
+        prev_level = calculate_level(prev_total)
+
+        # New totals
+        new_total = prev_total + duration
+        new_game = prev_game + duration
+        new_level = calculate_level(new_total)
+
+        # Announce level up
+        if new_level > prev_level:
+            msg = f"🎉 **{member.display_name}** leveled up to **Level {new_level}**!"
+            log_channel = await self.get_log_channel(member.guild)
+            if log_channel:
+                await log_channel.send(msg)
+            print(msg)
+
+        # Title role logic
+        titles = set(user_doc.get("titles", []))
+        log_channel = await self.get_log_channel(member.guild)
+
+        if new_total >= 360000 and "Professional Gamer" not in titles:
+            titles.add("Professional Gamer")
+            role = discord.utils.get(member.guild.roles, name="Professional Gamer")
+            if role:
+                await member.add_roles(role)
+            if log_channel:
+                await log_channel.send(f"🏆 **{member.display_name}** earned the title **Professional Gamer**!")
+
+        if new_game >= 360000:
+            game_title = f"{game} Master"
+            if game_title not in titles:
+                titles.add(game_title)
+                role = discord.utils.get(member.guild.roles, name=game_title)
+                if role:
+                    await member.add_roles(role)
+                if log_channel:
+                    await log_channel.send(f"🎮 **{member.display_name}** earned the title **{game_title}**!")
+
+        # Format session summary
+        time_parts = []
+        hours = duration // 3600
+        minutes = (duration % 3600) // 60
+        seconds = duration % 60
+        if hours:
+            time_parts.append(f"{hours} hr{'s' if hours != 1 else ''}")
+        if minutes:
+            time_parts.append(f"{minutes} min{'s' if minutes != 1 else ''}")
+        if seconds or not time_parts:
+            time_parts.append(f"{seconds} sec{'s' if seconds != 1 else ''}")
+        duration_str = ' '.join(time_parts)
+        msg = f"🎮 **{member.display_name}** played **{game}** in voice for **{duration_str}**"
+
+        if log_channel:
+            await log_channel.send(msg)
+        print(f"{reason} → {msg}")
+
+        # Update DB
+        await users.update_one(
+            {"user_id": user_id, "guild_id": guild_id},
+            {
+                "$inc": {
+                    f"game_time.{game}": duration,
+                    "total_time": duration
+                },
+                "$set": {
+                    "username": member.display_name,
+                    "level": new_level,
+                    "titles": list(titles)
+                }
+            },
+            upsert=True
+        )
+
 
 
 
