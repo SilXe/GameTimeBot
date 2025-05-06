@@ -1,4 +1,4 @@
-# utils/levels.py
+# utils/level.py
 
 # Level thresholds in total seconds
 LEVEL_THRESHOLDS = [
