@@ -14,6 +14,7 @@ class Tracker(commands.Cog):
         return discord.utils.get(guild.text_channels, name="bot-log")
 
     async def start_session(self, member: discord.Member, game: str):
+        print(f"[DEBUG] Calling start_session for {member.display_name} | Game: {game}")
         await sessions.update_one(
             {"user_id": str(member.id), "guild_id": str(member.guild.id)},
             {
@@ -30,6 +31,7 @@ class Tracker(commands.Cog):
         print(f"[+] Session started for {member.display_name} in {game}")
 
     async def end_session(self, member: discord.Member, reason: str):
+        print(f"[DEBUG] Calling end_session for {member.display_name}")
         doc = await sessions.find_one({
             "user_id": str(member.id),
             "guild_id": str(member.guild.id)
@@ -46,6 +48,7 @@ class Tracker(commands.Cog):
     async def on_voice_state_update(self, member, before, after):
         print(f"🎤 VOICE STATE UPDATE: {member.display_name}")
         game = member.activity.name if member.activity else None
+        print(f"[DEBUG] member.activity: {member.activity}")
 
         if after.channel and game:
             await self.start_session(member, game)
