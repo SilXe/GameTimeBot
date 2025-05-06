@@ -15,6 +15,7 @@ class Stats(commands.Cog):
     @commands.command(name="stats")
     async def stats(self, ctx):
         print(f"[DEBUG] !stats triggered by {ctx.author}")
+        await ctx.send("Stats command triggered!")
         user_id = str(ctx.author.id)
         guild_id = str(ctx.guild.id)
 

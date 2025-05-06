@@ -8,11 +8,14 @@ import asyncio
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
+"""
 intents = discord.Intents.default()
 intents.presences = True
 intents.members = True
 intents.voice_states = True
 intents.guilds = True  # Required to access guild and channels
+"""
+intents = discord.Intents.all()
 intents.message_content = True # For command inputs in chat
 
 
