@@ -63,6 +63,12 @@ async def load_extensions():
     except Exception as e:
         print(f"[!] Failed to load profile: {e}")
 
+    try:
+        await bot.load_extension("cogs.leaderboard")
+        print("[+] Loaded: leaderboard")
+    except Exception as e:
+        print(f"[!] Failed to load leaderboard: {e}")
+
 
 # Start bot
 async def main():
