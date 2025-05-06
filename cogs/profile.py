@@ -9,8 +9,9 @@ class Profile(commands.Cog):
         self.bot = bot
 
     @commands.command(name="profile")
-    async def profile(self, ctx):
-        user_id = str(ctx.author.id)
+    async def profile(self, ctx, member: discord.Member = None):
+        member = member or ctx.author
+        user_id = str(member.id)
         guild_id = str(ctx.guild.id)
 
         # Fetch user doc
@@ -38,7 +39,7 @@ class Profile(commands.Cog):
         ax.axis('off')
 
         y = 0.9
-        ax.text(0.05, y, f"User: {ctx.author.display_name}", fontsize=14, color='white', weight='bold')
+        ax.text(0.05, y, f"User: {member.display_name}", fontsize=14, color='white', weight='bold')
         y -= 0.1
         ax.text(0.05, y, f"Level: {level}", fontsize=12, color='white')
         y -= 0.08
