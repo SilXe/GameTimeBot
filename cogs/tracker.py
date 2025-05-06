@@ -39,6 +39,8 @@ class Tracker(commands.Cog):
                 duration = int((datetime.datetime.utcnow() - session["start_time"]).total_seconds())
                 await self.stop_session(member, duration, session["game"], "🔕 Left voice channel")
                 del active_sessions[user_id]
+            elif user_id not in active_sessions:
+                print(f"[WARN] {member.name} left voice but had no active session")
     
     @commands.Cog.listener()
     async def on_presence_update(self, before: discord.Member, after: discord.Member):
