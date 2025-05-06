@@ -3,6 +3,8 @@
 import discord
 from discord.ext import commands
 from db.database import users
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 
