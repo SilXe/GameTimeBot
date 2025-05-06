@@ -64,14 +64,15 @@ class Profile(commands.Cog):
         filled = bar_width * xp_progress
 
         # Draw XP bar background
-        ax.add_patch(plt.Rectangle((0.05, y), bar_width, 0.03, color='#40444B', zorder=1, transform=ax.transAxes))
+        ax.add_patch(plt.Rectangle((0.05, y), bar_width, 0.05, color='#40444B', zorder=1, transform=ax.transAxes))
 
         # Draw XP bar fill
-        ax.add_patch(plt.Rectangle((0.05, y), filled, 0.03, color='deepskyblue', zorder=2, transform=ax.transAxes))
+        ax.add_patch(plt.Rectangle((0.05, y), filled, 0.05, color='deepskyblue', zorder=2, transform=ax.transAxes))
 
         # Label percentage
         ax.text(0.5, y + 0.005, f"{int(xp_progress * 100)}% to next level", fontsize=10, color='white', ha='center', transform=ax.transAxes)
-        y -= 0.08
+        y -= 0.12
+
 
         if top_games:
             ax.text(0.05, y, "Top Games Played:", fontsize=12, color='cyan')
