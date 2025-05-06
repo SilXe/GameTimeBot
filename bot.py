@@ -56,6 +56,12 @@ async def load_extensions():
         print("[+] Loaded: stats")
     except Exception as e:
         print(f"[!] Failed to load stats: {e}")
+    
+    try:
+        await bot.load_extension("cogs.profile")
+        print("[+] Loaded: profile")
+    except Exception as e:
+        print(f"[!] Failed to load profile: {e}")
 
 
 # Start bot
