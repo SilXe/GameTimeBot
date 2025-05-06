@@ -3,6 +3,18 @@ from discord.ext import commands
 from db.database import users
 import matplotlib.pyplot as plt
 import io
+from utils.level import LEVEL_THRESHOLDS, calculate_level
+
+def get_xp_progress(total_seconds, level_thresholds):
+    current_level = calculate_level(total_seconds)
+    if current_level >= len(level_thresholds):
+        return 1.0, current_level  # Maxed out
+
+    prev_threshold = level_thresholds[current_level - 1] if current_level > 0 else 0
+    next_threshold = level_thresholds[current_level]
+
+    xp_progress = (total_seconds - prev_threshold) / (next_threshold - prev_threshold)
+    return xp_progress, current_level
 
 class Profile(commands.Cog):
     def __init__(self, bot):
@@ -45,6 +57,22 @@ class Profile(commands.Cog):
         y -= 0.08
         ax.text(0.05, y, f"Total Time: {total_str}", fontsize=12, color='white')
         y -= 0.12
+
+        # Calculate XP progress
+        xp_progress, level = get_xp_progress(total_seconds, LEVEL_THRESHOLDS)
+        bar_width = 0.9
+        filled = bar_width * xp_progress
+
+        # Draw XP bar background
+        ax.add_patch(plt.Rectangle((0.05, y), bar_width, 0.05, color='#40444B', zorder=1, transform=ax.transAxes))
+
+        # Draw XP bar fill
+        ax.add_patch(plt.Rectangle((0.05, y), filled, 0.05, color='deepskyblue', zorder=2, transform=ax.transAxes))
+
+        # Label percentage
+        ax.text(0.5, y + 0.005, f"{int(xp_progress * 100)}% to next level", fontsize=10, color='white', ha='center', transform=ax.transAxes)
+        y -= 0.12
+
 
         if top_games:
             ax.text(0.05, y, "Top Games Played:", fontsize=12, color='cyan')
