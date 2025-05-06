@@ -15,20 +15,24 @@ class Tracker(commands.Cog):
 
     async def start_session(self, member: discord.Member, game: str):
         print(f"[DEBUG] Calling start_session for {member.display_name} | Game: {game}")
-        await sessions.update_one(
-            {"user_id": str(member.id), "guild_id": str(member.guild.id)},
-            {
-                "$set": {
-                    "user_id": str(member.id),
-                    "guild_id": str(member.guild.id),
-                    "game": game,
-                    "start_time": datetime.datetime.utcnow(),
-                    "channel": member.voice.channel.name if member.voice else "unknown"
-                }
-            },
-            upsert=True
-        )
-        print(f"[+] Session started for {member.display_name} in {game}")
+        try:
+            await sessions.update_one(
+                {"user_id": str(member.id), "guild_id": str(member.guild.id)},
+                {
+                    "$set": {
+                        "user_id": str(member.id),
+                        "guild_id": str(member.guild.id),
+                        "game": game,
+                        "start_time": datetime.datetime.utcnow(),
+                        "channel": member.voice.channel.name if member.voice else "unknown"
+                    }
+                },
+                upsert=True
+            )
+            print(f"[+] Session started for {member.display_name} in {game}")
+        except Exception as e:
+            print(f"[ERROR] stop_session failed: {e}")
+        
 
     async def end_session(self, member: discord.Member, reason: str):
         print(f"[DEBUG] Calling end_session for {member.display_name}")
@@ -93,78 +97,81 @@ class Tracker(commands.Cog):
             print(msg)
 
     async def stop_session(self, member: discord.Member, duration: int, game: str, reason: str):
-        user_id = str(member.id)
-        guild_id = str(member.guild.id)
+        try:
+            user_id = str(member.id)
+            guild_id = str(member.guild.id)
 
-        user_doc = await users.find_one({"user_id": user_id, "guild_id": guild_id}) or {}
-        prev_total = user_doc.get("total_time", 0)
-        prev_game = user_doc.get("game_time", {}).get(game, 0)
-        prev_level = calculate_level(prev_total)
+            user_doc = await users.find_one({"user_id": user_id, "guild_id": guild_id}) or {}
+            prev_total = user_doc.get("total_time", 0)
+            prev_game = user_doc.get("game_time", {}).get(game, 0)
+            prev_level = calculate_level(prev_total)
 
-        new_total = prev_total + duration
-        new_game = prev_game + duration
-        new_level = calculate_level(new_total)
+            new_total = prev_total + duration
+            new_game = prev_game + duration
+            new_level = calculate_level(new_total)
 
-        if new_level > prev_level:
-            msg = f"🎉 **{member.display_name}** leveled up to **Level {new_level}**!"
+            if new_level > prev_level:
+                msg = f"🎉 **{member.display_name}** leveled up to **Level {new_level}**!"
+                log_channel = await self.get_log_channel(member.guild)
+                if log_channel:
+                    await log_channel.send(msg)
+                print(msg)
+
+            titles = set(user_doc.get("titles", []))
             log_channel = await self.get_log_channel(member.guild)
-            if log_channel:
-                await log_channel.send(msg)
-            print(msg)
 
-        titles = set(user_doc.get("titles", []))
-        log_channel = await self.get_log_channel(member.guild)
-
-        if new_total >= 360000 and "Professional Gamer" not in titles:
-            titles.add("Professional Gamer")
-            role = discord.utils.get(member.guild.roles, name="Professional Gamer")
-            if role:
-                await member.add_roles(role)
-            if log_channel:
-                await log_channel.send(f"🏆 **{member.display_name}** earned the title **Professional Gamer**!")
-
-        if new_game >= 360000:
-            game_title = f"{game} Master"
-            if game_title not in titles:
-                titles.add(game_title)
-                role = discord.utils.get(member.guild.roles, name=game_title)
+            if new_total >= 360000 and "Professional Gamer" not in titles:
+                titles.add("Professional Gamer")
+                role = discord.utils.get(member.guild.roles, name="Professional Gamer")
                 if role:
                     await member.add_roles(role)
                 if log_channel:
-                    await log_channel.send(f"🎮 **{member.display_name}** earned the title **{game_title}**!")
+                    await log_channel.send(f"🏆 **{member.display_name}** earned the title **Professional Gamer**!")
 
-        time_parts = []
-        hours = duration // 3600
-        minutes = (duration % 3600) // 60
-        seconds = duration % 60
-        if hours:
-            time_parts.append(f"{hours} hr{'s' if hours != 1 else ''}")
-        if minutes:
-            time_parts.append(f"{minutes} min{'s' if minutes != 1 else ''}")
-        if seconds or not time_parts:
-            time_parts.append(f"{seconds} sec{'s' if seconds != 1 else ''}")
-        duration_str = ' '.join(time_parts)
-        msg = f"🎮 **{member.display_name}** played **{game}** in voice for **{duration_str}**"
+            if new_game >= 360000:
+                game_title = f"{game} Master"
+                if game_title not in titles:
+                    titles.add(game_title)
+                    role = discord.utils.get(member.guild.roles, name=game_title)
+                    if role:
+                        await member.add_roles(role)
+                    if log_channel:
+                        await log_channel.send(f"🎮 **{member.display_name}** earned the title **{game_title}**!")
 
-        if log_channel:
-            await log_channel.send(msg)
-        print(f"{reason} → {msg}")
+            time_parts = []
+            hours = duration // 3600
+            minutes = (duration % 3600) // 60
+            seconds = duration % 60
+            if hours:
+                time_parts.append(f"{hours} hr{'s' if hours != 1 else ''}")
+            if minutes:
+                time_parts.append(f"{minutes} min{'s' if minutes != 1 else ''}")
+            if seconds or not time_parts:
+                time_parts.append(f"{seconds} sec{'s' if seconds != 1 else ''}")
+            duration_str = ' '.join(time_parts)
+            msg = f"🎮 **{member.display_name}** played **{game}** in voice for **{duration_str}**"
 
-        await users.update_one(
-            {"user_id": user_id, "guild_id": guild_id},
-            {
-                "$inc": {
-                    f"game_time.{game}": duration,
-                    "total_time": duration
+            if log_channel:
+                await log_channel.send(msg)
+            print(f"{reason} → {msg}")
+
+            await users.update_one(
+                {"user_id": user_id, "guild_id": guild_id},
+                {
+                    "$inc": {
+                        f"game_time.{game}": duration,
+                        "total_time": duration
+                    },
+                    "$set": {
+                        "username": member.display_name,
+                        "level": new_level,
+                        "titles": list(titles)
+                    }
                 },
-                "$set": {
-                    "username": member.display_name,
-                    "level": new_level,
-                    "titles": list(titles)
-                }
-            },
-            upsert=True
-        )
+                upsert=True
+            )
+        except Exception as e:
+            print(f"[ERROR] stop_session failed: {e}")
 
 async def setup(bot):
     await bot.add_cog(Tracker(bot))
